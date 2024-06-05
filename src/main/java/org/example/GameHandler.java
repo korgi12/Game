@@ -2,14 +2,20 @@ package org.example;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import java.net.Socket;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
 public class GameHandler implements Handler {
     private Game game;
     private ArrayDeque<String> dequePlayer;
+
+
+    public ArrayList<Socket> listOfUserConnects;
     public GameHandler() {
+        this.listOfUserConnects=listOfUserConnects;
         game = new Game();
         dequePlayer = new ArrayDeque<>();
         dequePlayer.add("player1");
@@ -52,4 +58,12 @@ public class GameHandler implements Handler {
 
         return response;
     }
+    public ArrayList<Socket> getListOfUserConnects() {
+        return listOfUserConnects;
+    }
+
+    public void setListOfUserConnects(ArrayList<Socket> listOfUserConnects) {
+        this.listOfUserConnects = listOfUserConnects;
+    }
+
 }

@@ -6,16 +6,52 @@ import org.json.simple.parser.JSONParser;
 import java.io.*;
 import java.net.Socket;
 import java.nio.CharBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 class ClientHandler implements Runnable {// класс ClientHandler реализует интерфейс Runnable
     private Socket clientSocket;//поле которое хранит сокет Клиента
     private final Handler handler;//реализация управления игрой
-
+    private MessageListener messageListener;
+    private BufferedWriter out;
+    private BufferedReader in;
     public ClientHandler(Socket socket, Handler handler) {// конструктор класса
         this.clientSocket = socket;
         this.handler = handler;
-    }
+        try {
+            this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            this.out = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
+    }
+    public void setMessageListener(MessageListener messageListener) {
+        this.messageListener = messageListener;
+    }
+    @Override
+    public void run() {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        executor.submit(this::handleRead);
+        executor.submit(this::handleWrite);
+        executor.shutdown();
+    }
+    public void handleRead() {
+        try {
+            String message;
+            while ((message = in.readLine()) != null) {
+                Request request = parseRequest(message.toString());
+                Response response = handler.handle(request);
+                if (messageListener != null) {
+                    messageListener.onMessage(response);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
     @Override
     public void run() {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));// поток для чтения данных от клиента
@@ -68,5 +104,8 @@ class ClientHandler implements Runnable {// класс ClientHandler реали�
             e.printStackTrace();
             return null;
         }
+    }
+    public void sendMessage(String message) {
+        messageQueue.offer(message);
     }
 }
