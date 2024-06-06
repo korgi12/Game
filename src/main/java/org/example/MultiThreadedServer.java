@@ -14,7 +14,7 @@ public class MultiThreadedServer {
 
     public static final int PORT = 51;
     private static Set<ClientHandler> clientHandlers = ConcurrentHashMap.newKeySet();
-    private static ServerObservable serverObservable = new ServerObservable();
+
     public void start() {
         ExecutorService threadPool = Executors.newFixedThreadPool(10);
         Handler handler = new GameHandler();
@@ -24,7 +24,7 @@ public class MultiThreadedServer {
             while (true) {
                 Socket clientSocket = serverSocket.accept();//ждем клиент
                 System.out.println("Клиент подключен: " + clientSocket.getInetAddress());
-                ClientHandler clientHandler = new ClientHandler(clientSocket,handler);
+                ClientHandler clientHandler = new ClientHandler(clientSocket, handler);
                 clientHandlers.add(clientHandler);
                 clientHandler.setMessageListener(message -> broadcastMessage(message, clientHandler));
                 threadPool.execute(clientHandler);
@@ -35,10 +35,12 @@ public class MultiThreadedServer {
             e.printStackTrace();
         }
     }
+
     public static void broadcastMessage(Response message, ClientHandler sender) {
         for (ClientHandler clientHandler : clientHandlers) {
             if (clientHandler != sender) {
                 clientHandler.sendMessage(message);
             }
         }
+    }
 }

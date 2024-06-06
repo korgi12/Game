@@ -6,17 +6,38 @@ import org.json.simple.parser.ParseException;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Client {
     private Socket socket;
     private BufferedReader in;
     private BufferedWriter out;
     private String playerId;
+    private BlockingQueue<String> queue = new LinkedBlockingQueue<>();
 
     public Client(String serverAddress) throws IOException {
         socket = new Socket(serverAddress, MultiThreadedServer.PORT);//подключение к серверу
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        executor.submit(this::ReadTask);
+
+    }
+
+    public void ReadTask() {
+        try {
+            while (true) {
+                String message;
+                while ((message = in.readLine()) != null) {
+                    queue.put(message);
+                }
+            }
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     public void sendRequest(String request) throws IOException {
@@ -26,24 +47,22 @@ public class Client {
 
     }
 
-    public String getResponse() throws IOException {
+    public String getResponse() {
         StringBuilder response = new StringBuilder();
-        System.out.println(socket.isConnected());
-        response.append(in.readLine());//читаем данные с сервера
+        try {
+            response.append(queue.take());//читаем данные с сервера
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
+        }
+
 
         return response.toString();
     }
 
     public String sendMoveRequest(String direction) {// это действие падает и не выполняется на сервере если не будет
         String requestJson = buildJsonRequest("MOVE", direction);
-
-
         try {
-            socket = new Socket("localhost", MultiThreadedServer.PORT);// этого
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
             sendRequest(requestJson);
-
             return getResponse();
         } catch (IOException ex) {
             return ex.getMessage();
@@ -53,9 +72,6 @@ public class Client {
     public String sendShootRequest(String direction) {// это действие падает и не выполняется на сервере если не будет
         String requestJson = buildJsonRequest("SHOOT", direction);
         try {
-            socket = new Socket("localhost", MultiThreadedServer.PORT);// этого
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
             sendRequest(requestJson);
             return getResponse();
         } catch (IOException ex) {
@@ -73,7 +89,7 @@ public class Client {
             JSONObject json = (JSONObject) parser.parse(answer);
 
             playerId = (String) json.get("playerId");
-            return  answer;
+            return answer;
 
         } catch (IOException | ParseException ex) {
             return ex.getMessage();
