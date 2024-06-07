@@ -43,5 +43,11 @@ public class Lunokhod {
         return json;
     }
 
+    public static Lunokhod fromJson(JSONObject jsonObject) {
+        int x = ((Long) jsonObject.get("x")).intValue();
+        int y = ((Long) jsonObject.get("y")).intValue();
+        return new Lunokhod(x, y);
+    }
+
     // Методы для перемещения и стрельбы
 }

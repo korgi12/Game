@@ -20,9 +20,12 @@ class ClientHandler implements Runnable {// класс ClientHandler реали�
     private final BlockingQueue<Response> messageQueue = new LinkedBlockingQueue<>();
     private BufferedWriter out;
     private BufferedReader in;
-    public ClientHandler(Socket socket, Handler handler) {// конструктор класса
+    private String playerId;
+
+    public ClientHandler(Socket socket, Handler handler ,String playerId) {// конструктор класса
         this.clientSocket = socket;
         this.handler = handler;
+        this.playerId=playerId;
         try {
             this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.out = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
@@ -31,15 +34,18 @@ class ClientHandler implements Runnable {// класс ClientHandler реали�
         }
 
     }
+
     public void setMessageListener(MessageListener messageListener) {
         this.messageListener = messageListener;
     }
+
     @Override
     public void run() {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         executor.submit(this::handleRead);
         executor.submit(this::handleWrite);
     }
+
     public void handleRead() {
         try {
             String message;
@@ -56,14 +62,20 @@ class ClientHandler implements Runnable {// класс ClientHandler реали�
             e.printStackTrace();
         }
     }
+
     public void handleWrite() {
-        try {
-            while (true) {
+        while (true) {
+            try {
+
                 Response message = messageQueue.take();
+                System.out.println("Получено" + message.toJson());
+                message.setPlayerId(playerId);
                 out.write(message.toJson());
+                out.newLine();
+                out.flush();
+            } catch (InterruptedException | IOException e) {
+                Thread.currentThread().interrupt();
             }
-        } catch (InterruptedException | IOException e) {
-            Thread.currentThread().interrupt();
         }
     }
 //    @Override
@@ -119,7 +131,9 @@ class ClientHandler implements Runnable {// класс ClientHandler реали�
             return null;
         }
     }
+
     public void sendMessage(Response message) {
-        messageQueue.offer(message);
+        if(messageQueue.offer(message))
+            System.out.println("ЗАписано");
     }
 }

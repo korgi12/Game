@@ -1,12 +1,16 @@
 package org.example;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
@@ -14,6 +18,9 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.Objects;
 
 public class GameBoard extends Application {
@@ -23,6 +30,8 @@ public class GameBoard extends Application {
     private Lunokhod player2;
     private Stage primaryStage;
     private TextArea textArea;
+    private Label scoreLabel;
+    private Label currentPlayerLabel;
 
     public static void main(String[] args) {
         launch(args);
@@ -30,12 +39,11 @@ public class GameBoard extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-
-        client = new Client("localhost");//создание клеинта
+        client = new Client("localhost", this); //создание клиента
 
         this.primaryStage = primaryStage;
-        // Инициализация графического интерфейса
 
+        // Инициализация графического интерфейса
         GridPane grid = new GridPane();
         grid.setPadding(new Insets(10));
         grid.setHgap(5);
@@ -44,6 +52,7 @@ public class GameBoard extends Application {
         cells = new Rectangle[8][8];
         initializeBoard(grid);
 
+        // Создание кнопок
         Button btnUp = new Button("Up");
         btnUp.setOnAction(e -> move("up"));
 
@@ -68,6 +77,7 @@ public class GameBoard extends Application {
         Button btnShootRight = new Button("Shoot Right");
         btnShootRight.setOnAction(e -> shoot("right"));
 
+        // Создание панели управления
         GridPane controls = new GridPane();
         controls.setHgap(5);
         controls.setVgap(5);
@@ -80,25 +90,40 @@ public class GameBoard extends Application {
         controls.add(btnShootLeft, 0, 3);
         controls.add(btnShootRight, 2, 3);
 
+        // Создание кнопки сериализации
+        Button btnSerialize = new Button("Serialize");
+        btnSerialize.setOnAction(e -> serializeGameState());
+        // Создание кнопки загрузки
+        Button btnDeserialize = new Button("Load");
+        btnDeserialize.setOnAction(e -> deserializeGameState());
+        // Создание текстового поля для сообщений
         textArea = new TextArea();
         textArea.setEditable(false);
         textArea.setPrefHeight(200);
         textArea.setWrapText(true);
 
-        GridPane mainLayout = new GridPane();
-        mainLayout.setHgap(10);
-        mainLayout.setVgap(10);
-        mainLayout.add(grid, 0, 0);
-        mainLayout.add(controls, 1, 0);
-        mainLayout.add(textArea, 0, 1, 2, 1);
+        // Создание меток для счёта и текущего игрока
+        scoreLabel = new Label("Очки: 0");
+        currentPlayerLabel = new Label("Ходит: Player 1");
 
+        // Создание панели для информации о счёте и текущем игроке
+        HBox infoPane = new HBox(10);
+        infoPane.getChildren().addAll(scoreLabel, currentPlayerLabel);
+
+        // Создание основного макета
+        VBox mainLayout = new VBox(10);
+        mainLayout.setPadding(new Insets(10));
+        mainLayout.getChildren().addAll(infoPane, grid, controls, btnSerialize, textArea,btnDeserialize);
+
+        // Создание сцены
         Scene scene = new Scene(mainLayout, 800, 800);
         primaryStage.setScene(scene);
         primaryStage.show();
 
         // Начальное состояние игры
-        updateBoard();
+        initialState();
     }
+
 
     private void initializeBoard(GridPane grid) {
         for (int row = 0; row < 8; row++) {
@@ -115,40 +140,44 @@ public class GameBoard extends Application {
     }
 
     private void move(String direction) {
-        // Отправляем запрос на сервер для перемещения
-        String response = client.sendMoveRequest(direction);
-        handleResponse(response);
+        client.sendMoveRequest(direction);
     }
 
     private void shoot(String direction) {
-        // Отправляем запрос на сервер для стрельбы
-        String response = client.sendShootRequest(direction);
-        handleResponse(response);
+        client.sendShootRequest(direction);
     }
 
-    private void handleResponse(String response) {
-        // Обрабатываем ответ от сервера и обновляем состояние доски
-        // Примерный JSON ответ: {"board": [[0, -1, 0, ...], ...], "player1": {"x": 0, "y": 0}, "player2": {"x": 7, "y": 7}}
-        updateBoard(response);
+    private void initialState() {
+        client.getInitialState();
+    }
+    private void deserializeGameState() {
+        client.deserializeGameState();
     }
 
-    private void updateBoard() {
-        // Получаем начальное состояние доски с сервера
-        String response = client.getInitialState();
-        updateBoard(response);
+    private void serializeGameState() {
+        client.serializeGameState();
     }
-
-    private void updateBoard(String jsonResponse) {
+    public void updateBoard(String jsonResponse) {
         try {
             JSONParser parser = new JSONParser();
             JSONObject json = (JSONObject) parser.parse(jsonResponse);
             if (Objects.isNull(primaryStage.getTitle()))
                 primaryStage.setTitle((String) json.get("playerId"));
+
+
+
             textArea.setText((String) json.get("statusText"));
             JSONObject body = (JSONObject) json.get("body");
+            Platform.runLater(() -> {
+                if (body.get("isPlayer1Turn").equals(true))
+                    currentPlayerLabel.setText("Ходит: Player 1");
+                else currentPlayerLabel.setText("Ходит: Player 2");
+                scoreLabel.setText("Очки: "+ json.get("points"));
+            });
             JSONArray boardArray = (JSONArray) body.get("board");
             JSONObject player1Json = (JSONObject) body.get("player1");
             JSONObject player2Json = (JSONObject) body.get("player2");
+
 
             // Очистка доски
             for (int row = 0; row < 8; row++) {
@@ -170,8 +199,8 @@ public class GameBoard extends Application {
 
             // Расстановка игроков
             Long code = (Long) json.get("statusCode");
-            if (code==300) {
-                if (primaryStage.getTitle().equals("player1")) {
+            if (code == 300) {
+                if (json.get("winner").equals("player1")) {
                     int player1X = ((Long) player1Json.get("x")).intValue();
                     int player1Y = ((Long) player1Json.get("y")).intValue();
                     cells[player1Y][player1X].setFill(Color.BLUE);

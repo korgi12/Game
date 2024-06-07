@@ -15,27 +15,34 @@ public class Client {
     private Socket socket;
     private BufferedReader in;
     private BufferedWriter out;
-    private String playerId;
-    private BlockingQueue<String> queue = new LinkedBlockingQueue<>();
+    private GameBoard gameBoard;
 
-    public Client(String serverAddress) throws IOException {
+private ExecutorService executor;
+    private String playerId;
+    private final BlockingQueue<String> queue = new LinkedBlockingQueue<>();
+
+    public Client(String serverAddress, GameBoard gameBoard) throws IOException {
+        this.gameBoard = gameBoard;
         socket = new Socket(serverAddress, MultiThreadedServer.PORT);//подключение к серверу
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-        ExecutorService executor = Executors.newFixedThreadPool(1);
+        executor = Executors.newFixedThreadPool(2);
         executor.submit(this::ReadTask);
+
 
     }
 
     public void ReadTask() {
         try {
             while (true) {
-                String message;
-                while ((message = in.readLine()) != null) {
-                    queue.put(message);
+                String message = in.readLine();
+                if (queue.offer(message)) {
+                    System.out.println("Добавлено в очередь" + playerId);
+                } else {
+                    System.out.println("НЕЕЕ Добавлено в очередь" + playerId);
                 }
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
@@ -47,52 +54,66 @@ public class Client {
 
     }
 
-    public String getResponse() {
-        StringBuilder response = new StringBuilder();
-        try {
-            response.append(queue.take());//читаем данные с сервера
-        } catch (InterruptedException ex) {
-            ex.printStackTrace();
+    public void updateBord() {
+        while (true){
+            try {
+                gameBoard.updateBoard(queue.take());
+            }catch (InterruptedException ex){
+                System.out.println(ex);
+            }
+
         }
-
-
-        return response.toString();
     }
 
-    public String sendMoveRequest(String direction) {// это действие падает и не выполняется на сервере если не будет
+    public void sendMoveRequest(String direction) {// это действие падает и не выполняется на сервере если не будет
         String requestJson = buildJsonRequest("MOVE", direction);
         try {
             sendRequest(requestJson);
-            return getResponse();
         } catch (IOException ex) {
-            return ex.getMessage();
+            System.out.println(ex.getMessage());
         }
     }
 
-    public String sendShootRequest(String direction) {// это действие падает и не выполняется на сервере если не будет
+    public void sendShootRequest(String direction) {// это действие падает и не выполняется на сервере если не будет
         String requestJson = buildJsonRequest("SHOOT", direction);
         try {
             sendRequest(requestJson);
-            return getResponse();
         } catch (IOException ex) {
-            return ex.getMessage();
+            System.out.println(ex.getMessage());
+        }
+    }
+    public void serializeGameState() {// это действие падает и не выполняется на сервере если не будет
+        String requestJson = "{\"action\":\"SERIALIZE\"}";
+        try {
+            sendRequest(requestJson);
+        } catch (IOException ex) {
+            System.out.println(ex.getMessage());
+        }
+    }public void deserializeGameState() {// это действие падает и не выполняется на сервере если не будет
+        String requestJson = "{\"action\":\"DESERIALIZE\"}";
+        try {
+            sendRequest(requestJson);
+        } catch (IOException ex) {
+            System.out.println(ex.getMessage());
         }
     }
 
-    public String getInitialState() {//все рабоатет изначально
+    public void getInitialState() {//все рабоатет изначально
         String requestJson = "{\"action\":\"GET\"}";
         try {
             sendRequest(requestJson);
-            String answer = getResponse();
+            String answer = queue.take();
 
             JSONParser parser = new JSONParser();
             JSONObject json = (JSONObject) parser.parse(answer);
 
             playerId = (String) json.get("playerId");
-            return answer;
-
+            gameBoard.updateBoard(answer);
+            executor.submit(this::updateBord);
         } catch (IOException | ParseException ex) {
-            return ex.getMessage();
+            System.out.println(ex.getMessage());
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -103,5 +124,13 @@ public class Client {
         bodyJson.put("playerId", playerId);
 
         return bodyJson.toString();
+    }
+
+    public String getPlayerId() {
+        return playerId;
+    }
+
+    public void setPlayerId(String playerId) {
+        this.playerId = playerId;
     }
 }

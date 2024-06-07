@@ -2,13 +2,27 @@ package org.example;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Random;
 
 public class Game {
     private int[][] board; // 8x8 шахматная доска
     private Lunokhod player1;
     private Lunokhod player2;
+
+    public boolean isPlayer1Turn() {
+        return isPlayer1Turn;
+    }
+
+    public void setPlayer1Turn(boolean player1Turn) {
+        isPlayer1Turn = player1Turn;
+    }
+
     private boolean isPlayer1Turn;
     private Random random;
 
@@ -41,12 +55,12 @@ public class Game {
         isPlayer1Turn = true;
     }
 
-    public synchronized String movePlayer(String playerId, String direction) {//synchronized
+    public synchronized String movePlayer(String playerId, String direction, int points) {//synchronized
         Lunokhod player = playerId.equals("player1") ? player1 : player2;
         if ((isPlayer1Turn && playerId.equals("player2")) || (!isPlayer1Turn && playerId.equals("player1"))) {
             return "Not your turn";
         }
-        int points = random.nextInt(6) + 1; // Очки действия от 1 до 6
+
         boolean validMove = false;
 
         while (points > 0 && !validMove) {
@@ -85,13 +99,12 @@ public class Game {
         }
         return "Invalid move or not enough points";
     }
-    public synchronized String shootPlayer(String playerId, String direction) {
+    public synchronized String shootPlayer(String playerId, String direction,int points) {
         Lunokhod player = playerId.equals("player1") ? player1 : player2;
         Lunokhod opponent = playerId.equals("player1") ? player2 : player1;
         if ((isPlayer1Turn && playerId.equals("player2")) || (!isPlayer1Turn && playerId.equals("player1"))) {
             return "Not your turn";
         }
-        int points = random.nextInt(6) + 1; // Очки действия от 1 до 6
 
         if (points < 3) {
             return "Not enough points to shoot";
@@ -181,6 +194,43 @@ public class Game {
         json.put("board", boardArray);
         json.put("player1", player1.toJson());
         json.put("player2", player2.toJson());
+        json.put("isPlayer1Turn", isPlayer1Turn);
         return json;
+    }
+    public void saveToFile() {
+        JSONObject jsonObject = toJson();
+        try (FileWriter file = new FileWriter("GameSave")) {
+            file.write(jsonObject.toJSONString());
+            file.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    public void loadFromFile() {
+        JSONParser jsonParser = new JSONParser();
+        try (FileReader reader = new FileReader("GameSave")) {
+            JSONObject jsonObject = (JSONObject) jsonParser.parse(reader);
+
+
+            board = new int[8][8];
+
+            JSONArray boardArray = (JSONArray) jsonObject.get("board");
+            for (int i = 0; i < 8; i++) {
+                JSONArray rowArray = (JSONArray) boardArray.get(i);
+                for (int j = 0; j < 8; j++) {
+                    board[i][j] = ((Long) rowArray.get(j)).intValue();
+                }
+            }
+
+            player1 = Lunokhod.fromJson((JSONObject) jsonObject.get("player1"));
+            player2 = Lunokhod.fromJson((JSONObject) jsonObject.get("player2"));
+            isPlayer1Turn = (Boolean) jsonObject.get("isPlayer1Turn");
+
+
+            System.out.println("Загружено из файла");
+        } catch (IOException | ParseException e) {
+            e.printStackTrace();
+
+        }
     }
 }
